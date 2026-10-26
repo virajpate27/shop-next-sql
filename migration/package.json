@@ -1,0 +1,15 @@
+{
+  "name": "shopnext-firestore-migration",
+  "private": true,
+  "type": "module",
+  "description": "One-off tool: copies Firestore data into MySQL. NOT part of the deployed app. Run locally or over SSH, then delete.",
+  "scripts": {
+    "dry-run": "node --env-file=.env.migration migrate-firestore-to-mysql.mjs --dry-run",
+    "migrate": "node --env-file=.env.migration migrate-firestore-to-mysql.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.1.0",
+    "mysql2": "^3.11.3"
+  },
+  "engines": { "node": ">=20.6.0" }
+}

@@ -14,7 +14,7 @@ export async function GET(req) {
     featured: sp.get('featured') === '1', pageSize: sp.get('pageSize') || 12, offset: sp.get('offset') || 0,
     excludeId: sp.get('exclude') || null,
   })
-  return NextResponse.json(data, { headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120' } })
+  return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export const POST = withAdmin(async (req) => {

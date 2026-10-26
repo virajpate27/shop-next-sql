@@ -1,29 +1,42 @@
 {
-  "name": "shop-next-sql",
-  "version": "1.0.0",
-  "description": "Drop these files into your repo (paths mirror your project). Nothing here has been run against a live MySQL server: treat it as a reviewed starting point and test on a staging DB first (Day 2–5 of the plan).",
-  "main": "middleware.js",
-  "directories": {
-    "lib": "lib"
-  },
+  "name": "shop-next",
+  "version": "0.1.0",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/virajpate27/shop-next-sql.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/virajpate27/shop-next-sql/issues"
-  },
-  "homepage": "https://github.com/virajpate27/shop-next-sql#readme",
   "dependencies": {
-    "next": "^16.4.3",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.1.0",
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.10.0",
+    "jose": "^5.9.6",
+    "js-cookie": "^3.0.8",
+    "lucide-react": "^1.24.0",
+    "mysql2": "^3.11.3",
+    "next": "16.2.10",
+    "next-cloudinary": "^6.17.5",
+    "razorpay": "^2.9.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-hook-form": "^7.81.0",
+    "recharts": "^3.9.2",
+    "resend": "^6.17.2",
+    "slugify": "^1.6.9",
+    "sonner": "^2.0.7",
+    "xlsx": "^0.18.5",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.10",
+    "tailwindcss": "^4"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   }
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { one, query, newId } from '@/lib/db'
 import { hashPassword } from '@/lib/auth/password'
 import { signSession, setSessionCookie } from '@/lib/auth/session'
@@ -6,6 +7,8 @@ import { sendEmail } from '@/lib/sendEmail'
 import { getEmailTemplate } from '@/emails/templates'
 
 export async function POST(req) {
+  const rl = rateLimit(`register:${clientIp(req)}`, { max: 5, windowMs: 60*60*1000 })
+  if (!rl.ok) return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } })
   const { email, password, name } = await req.json().catch(() => ({}))
   const e = String(email || '').toLowerCase().trim()
   if (!/^\S+@\S+\.\S+$/.test(e)) return NextResponse.json({ error: 'Invalid email' }, { status: 400 })

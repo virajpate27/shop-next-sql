@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { one, query } from '@/lib/db'
 import { withAuth } from '@/lib/auth/guards'
+import { COOKIE, verifySession } from '@/lib/auth/session'
 
 // Same shape the old Firestore `users/{uid}` profile had, so AuthContext/useWishlist keep working.
 async function profile(uid) {
@@ -13,7 +14,13 @@ async function profile(uid) {
   }
 }
 
-export const GET = withAuth(async (_req, _ctx, auth) => NextResponse.json({ user: await profile(auth.uid) }))
+export async function GET(req) {
+  const uid = await verifySession(req.cookies.get(COOKIE)?.value)
+  if (!uid) return NextResponse.json({ user: null }, { headers: { 'Cache-Control': 'no-store' } })
+  const user = await profile(uid)
+  if (!user || user.blocked) return NextResponse.json({ user: null }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ user }, { headers: { 'Cache-Control': 'no-store' } })
+}
 
 // Replaces profile page's updateFirebaseProfile + updateDoc(displayName)
 export const PATCH = withAuth(async (req, _ctx, auth) => {

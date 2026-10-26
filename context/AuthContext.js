@@ -16,7 +16,11 @@ export function AuthProvider({ children }) {
     refresh()
     const onExpired = () => setProfile(null)
     window.addEventListener('auth:expired', onExpired)
-    return () => window.removeEventListener('auth:expired', onExpired)
+    window.addEventListener('auth:changed', refresh)
+    return () => {
+      window.removeEventListener('auth:expired', onExpired)
+      window.removeEventListener('auth:changed', refresh)
+    }
   }, [refresh])
 
   // `user` keeps the fields pages already read (uid, email, displayName, photoURL)

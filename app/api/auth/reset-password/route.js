@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 import crypto from 'node:crypto'
 import { one, query } from '@/lib/db'
 import { hashPassword } from '@/lib/auth/password'
 
 export async function POST(req) {
+  const rl = rateLimit(`reset:${clientIp(req)}`, { max: 10 })
+  if (!rl.ok) return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } })
   const { token, password } = await req.json().catch(() => ({}))
   if (!token || !password || password.length < 8) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   const h = crypto.createHash('sha256').update(token).digest('hex')

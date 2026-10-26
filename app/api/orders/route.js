@@ -47,8 +47,8 @@ export const POST = withAuth(async (req, _ctx, auth) => {
       }
       if (qty > available) throw new HttpError(409, available > 0 ? `Only ${available} left of "${p.name}"` : `"${p.name}" is out of stock`)
       return {
-        productId: p.id, name: p.name, variantId: i.variantId || null, variantLabel: i.variantLabel || null,
-        selectedOptions: i.selectedOptions || null, price, image: p.images?.[0] || null, quantity: qty,
+        productId: p.id, name: p.name, variantId: i.variantId || null, variantLabel: i.variantLabel ? String(i.variantLabel).slice(0, 200) : null,
+        selectedOptions: i.selectedOptions && typeof i.selectedOptions === 'object' && JSON.stringify(i.selectedOptions).length < 1000 ? i.selectedOptions : null, price, image: (i.image && p.images?.includes(i.image)) ? i.image : (p.images?.[0] || null), quantity: qty,
         taxRate: p.taxRate || 0, taxType: p.taxType || 'inclusive', category: p.category,
       }
     })
@@ -82,7 +82,7 @@ export const POST = withAuth(async (req, _ctx, auth) => {
 
     // COD is final now → take stock + coupon use in the same transaction. Razorpay does this on payment verify.
     if (isCod) {
-      for (const l of lines) await applyStockChange(conn, { productId: l.productId, variantId: l.variantId, qty: l.quantity, sale: true })
+      for (const l of lines) await applyStockChange(conn, { productId: l.productId, variantId: l.variantId, qty: l.quantity, sale: true, strict: true })
       if (coupon && !(await consumeCoupon(conn, coupon.id))) throw new HttpError(409, 'This coupon has reached its usage limit')
     }
     return { id, total, status }

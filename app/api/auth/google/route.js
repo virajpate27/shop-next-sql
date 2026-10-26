@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { one, query, newId } from '@/lib/db'
 import { signSession, setSessionCookie } from '@/lib/auth/session'
 import { sendEmail } from '@/lib/sendEmail'
@@ -7,6 +8,7 @@ import { getEmailTemplate } from '@/emails/templates'
 // Client obtains a Google OAuth access_token (popup) and posts it here.
 // We verify it was issued for OUR client id, then read the profile.
 export async function POST(req) {
+  if (!rateLimit(`google:${clientIp(req)}`, { max: 20 }).ok) return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429 })
   const { accessToken } = await req.json().catch(() => ({}))
   if (!accessToken) return NextResponse.json({ error: 'Missing token' }, { status: 400 })
 

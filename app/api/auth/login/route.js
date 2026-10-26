@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { one, query } from '@/lib/db'
 import { checkPassword, hashPassword, firebaseScryptVerify } from '@/lib/auth/password'
 import { signSession, setSessionCookie } from '@/lib/auth/session'
@@ -6,6 +7,8 @@ import { signSession, setSessionCookie } from '@/lib/auth/session'
 const BAD = () => NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
 
 export async function POST(req) {
+  const rl = rateLimit(`login:${clientIp(req)}`, { max: 10 })
+  if (!rl.ok) return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } })
   const { email, password } = await req.json().catch(() => ({}))
   if (!email || !password) return BAD()
   const u = await one('SELECT * FROM users WHERE email = ?', [String(email).toLowerCase().trim()])

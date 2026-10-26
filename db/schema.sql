@@ -2,6 +2,7 @@
 -- IDs are VARCHAR so existing Firestore document IDs can be preserved
 -- (orders embed product IDs inside their JSON items, so IDs must not change).
 SET NAMES utf8mb4;
+-- Requires MySQL 8.0+ (or 5.7+): JSON columns, DATETIME(3), utf8mb4. Run once on an EMPTY database.
 
 CREATE TABLE users (
   id            VARCHAR(40)  NOT NULL PRIMARY KEY,
@@ -18,7 +19,7 @@ CREATE TABLE users (
   updated_at    DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uq_users_email (email),
   UNIQUE KEY uq_users_google (google_sub)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE password_resets (
   token_hash CHAR(64) NOT NULL PRIMARY KEY,   -- sha256 of the emailed token
@@ -26,7 +27,7 @@ CREATE TABLE password_resets (
   expires_at DATETIME NOT NULL,
   used_at    DATETIME NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE addresses (
   id         VARCHAR(40) NOT NULL PRIMARY KEY,
@@ -35,7 +36,7 @@ CREATE TABLE addresses (
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   KEY ix_addr_user (user_id),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE wishlist (
   user_id    VARCHAR(40) NOT NULL,
@@ -43,14 +44,14 @@ CREATE TABLE wishlist (
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   PRIMARY KEY (user_id, product_id),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE carts (
   user_id    VARCHAR(40) NOT NULL PRIMARY KEY,
   data       JSON NOT NULL,                   -- {items, appliedCoupon, couponDiscount}
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE categories (
   id         VARCHAR(40)  NOT NULL PRIMARY KEY,
@@ -60,7 +61,7 @@ CREATE TABLE categories (
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uq_cat_slug (slug)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE products (
   id              VARCHAR(40)   NOT NULL PRIMARY KEY,
@@ -90,7 +91,7 @@ CREATE TABLE products (
   KEY ix_products_category (category),
   KEY ix_products_featured (featured, created_at),
   KEY ix_products_created (created_at)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE coupons (
   id             VARCHAR(40)  NOT NULL PRIMARY KEY,
@@ -107,7 +108,7 @@ CREATE TABLE coupons (
   created_at     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uq_coupon_code (code)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE orders (
   id                  VARCHAR(40)   NOT NULL PRIMARY KEY,
@@ -136,7 +137,7 @@ CREATE TABLE orders (
   KEY ix_orders_status (status),
   KEY ix_orders_created (created_at),
   UNIQUE KEY uq_orders_rzp (razorpay_order_id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- No FK orders.user_id -> users.id on purpose: deleting a customer must never delete order history.
 
 CREATE TABLE returns (
@@ -157,7 +158,7 @@ CREATE TABLE returns (
   KEY ix_returns_order (order_id),
   KEY ix_returns_user (user_id),
   KEY ix_returns_status (status, created_at)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE reviews (
   id           VARCHAR(40)  NOT NULL PRIMARY KEY,
@@ -170,10 +171,10 @@ CREATE TABLE reviews (
   created_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY uq_review_user_product (product_id, user_id),
   KEY ix_reviews_user (user_id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE settings (
   `key`      VARCHAR(64) NOT NULL PRIMARY KEY,   -- e.g. 'shipping'
   value      JSON NOT NULL,
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

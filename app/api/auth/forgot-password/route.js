@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 import crypto from 'node:crypto'
 import { one, query } from '@/lib/db'
 import { sendEmail } from '@/lib/sendEmail'
@@ -6,6 +7,8 @@ import { sendEmail } from '@/lib/sendEmail'
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex')
 
 export async function POST(req) {
+  const rl = rateLimit(`forgot:${clientIp(req)}`, { max: 5, windowMs: 60*60*1000 })
+  if (!rl.ok) return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } })
   const { email } = await req.json().catch(() => ({}))
   const u = email && await one('SELECT id,email,display_name FROM users WHERE email=?', [String(email).toLowerCase().trim()])
   if (u) {
