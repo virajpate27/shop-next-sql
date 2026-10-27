@@ -12,16 +12,80 @@ export const GET = withAuth(async (_req, { params }, auth) => {
 })
 
 // Admin: change status (replaces updateOrderStatus)
+
 export const PATCH = withAuth(async (req, { params }, auth) => {
-  if (auth.role !== 'admin') throw new HttpError(403, 'Access denied — admin only')
-  const { status, note = '' } = await req.json()
-  if (!status) throw new HttpError(400, 'Missing status')
-  const msg = note || STATUS_NOTES[status] || `Order status updated to ${status}`
-  const [r] = await pool.query(
-    "UPDATE orders SET status=?, timeline=JSON_ARRAY_APPEND(timeline,'$',CAST(? AS JSON)) WHERE id=?", [status, event(status, msg), (await params).id])
-  if (!r.affectedRows) throw new HttpError(404, 'Order not found')
+  if (auth.role !== 'admin') {
+    throw new HttpError(403, 'Access denied — admin only')
+  }
+
+  const body = await req.json().catch(() => ({}))
+
+  const status =
+    typeof body.status === 'string'
+      ? body.status.trim().toLowerCase()
+      : ''
+
+  const allowedStatuses = [
+    'pending',
+    'confirmed',
+    'processing',
+    'shipped',
+    'delivered',
+    'cancelled',
+  ]
+
+  if (!allowedStatuses.includes(status)) {
+    throw new HttpError(400, 'Invalid order status')
+  }
+
+  const note =
+    typeof body.note === 'string'
+      ? body.note.trim().slice(0, 500)
+      : ''
+
+  const msg =
+    note ||
+    STATUS_NOTES[status] ||
+    `Order status updated to ${status}`
+
+  const orderId = (await params).id
+
+  const [result] = await pool.query(
+    `UPDATE orders
+     SET status = ?,
+         timeline = JSON_ARRAY_APPEND(
+           COALESCE(timeline, JSON_ARRAY()),
+           '$',
+           JSON_OBJECT(
+             'status', ?,
+             'timestamp', ?,
+             'note', ?
+           )
+         )
+     WHERE id = ?`,
+    [
+      status,
+      status,
+      new Date().toISOString(),
+      msg,
+      orderId,
+    ]
+  )
+
+  if (result.affectedRows === 0) {
+    const existing = await one(
+      'SELECT id FROM orders WHERE id = ?',
+      [orderId]
+    )
+
+    if (!existing) {
+      throw new HttpError(404, 'Order not found')
+    }
+  }
+
   return NextResponse.json({ ok: true })
 })
+
 
 export const DELETE = withAuth(async (_req, { params }, auth) => {
   if (auth.role !== 'admin') throw new HttpError(403, 'Access denied — admin only')
