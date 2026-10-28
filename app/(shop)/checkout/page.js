@@ -1,6 +1,6 @@
 // src/app/(shop)/checkout/page.js
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -135,10 +135,15 @@ export default function CheckoutPage() {
   // ── Order ──────────────────────────────────────────────────────────────
   const [placingOrder, setPlacingOrder] = useState(false);
 
+    // Set the moment an order is saved. Stops the "empty cart → /cart" guard below from hijacking the redirect
+  // to the order page (clearCart() empties the cart a split second before we navigate).
+  const orderPlacedRef = useRef(false);
+
+
   // ── Guards ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!authLoading && !user) router.push("/login?redirect=/checkout");
-  }, [user, authLoading, router]);
+   useEffect(() => {
+    if (!authLoading && items.length === 0 && !orderPlacedRef.current) router.push("/cart");
+  }, [items, authLoading, router]);
 
   useEffect(() => {
     if (!authLoading && items.length === 0) router.push("/cart");
@@ -248,6 +253,7 @@ export default function CheckoutPage() {
         const placed = await placeOrder(orderPayload); // stock + coupon are handled inside the server transaction
         const orderId = placed.orderId;
         const finalOrder = { ...baseOrderData, total: placed.total, status: "confirmed" };
+        orderPlacedRef.current = true;
         clearCart(); // also clears coupon from store
 
         Promise.allSettled([
@@ -315,6 +321,7 @@ export default function CheckoutPage() {
         triggerEmail("admin_new_order", process.env.NEXT_PUBLIC_ADMIN_EMAIL, { order: finalOrder, orderId }),
       ]);
 
+      orderPlacedRef.current = true;
       clearCart();
       toast.success("Payment successful!");
       router.push(`/orders/${orderId}?success=true`);
@@ -324,6 +331,15 @@ export default function CheckoutPage() {
     } finally {
       setPlacingOrder(false);
     }
+  }
+
+  // Order saved, cart already emptied, navigation to the success page in progress
+  if (orderPlacedRef.current) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center text-gray-500">
+        Order placed! Taking you to your order…
+      </div>
+    );
   }
 
   if (authLoading || !user || items.length === 0) return null;
