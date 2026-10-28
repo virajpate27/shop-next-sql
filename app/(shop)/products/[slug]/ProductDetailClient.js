@@ -74,7 +74,8 @@ export function ProductDetailClient({ product, related }) {
       ? getVariantLabel(selectedVariant, product.variationTypes)
       : ''
 
-    addItem({
+    const inCart = addItem({
+      quantity, 
       productId:       product.id,
       name:            product.name,
       variantId:       selectedVariant?.id      || null,
@@ -89,10 +90,11 @@ export function ProductDetailClient({ product, related }) {
       slug:            product.slug              || '',
     })
 
+     const name = variantLabel ? `${product.name} (${variantLabel})` : product.name
     toast.success(
-      variantLabel
-        ? `${product.name} (${variantLabel}) added to cart`
-        : `${product.name} added to cart`
+      inCart > quantity
+        ? `${name} added to cart (${inCart} in cart)`
+        : `${quantity > 1 ? `${quantity} × ` : ''}${name} added to cart`
     )
   }
 
