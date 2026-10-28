@@ -8,6 +8,7 @@ import { rowToOrder, event } from '@/lib/repo/orders'
 import { calculateDiscount } from '@/lib/coupons'
 import { calculateShipping } from '@/lib/shipping'
 import { calculateCartTax, getTaxBreakdown } from '@/utils/tax'
+import { getVariantLabel } from '@/utils/variations'
 
 const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100
 
@@ -39,16 +40,18 @@ export const POST = withAuth(async (req, _ctx, auth) => {
       const p = byId[i.productId]
       const qty = Math.max(1, Math.floor(Number(i.quantity) || 1))
       if (!p) throw new HttpError(400, 'A product in your cart is no longer available')
-      let price = p.price, available = p.stock
+       let price = p.price, available = p.stock, variantLabel = null, selectedOptions = null
       if (i.variantId) {
         const v = (p.variants || []).find((x) => x.id === i.variantId)
         if (!v) throw new HttpError(400, `Selected option for "${p.name}" is no longer available`)
         price = Number(v.price) || p.price; available = Number(v.stock) || 0
+        variantLabel = getVariantLabel(v, p.variationTypes) || null   // e.g. "Small" or "Red / Large" — from the database
+        selectedOptions = v.combination || null
       }
       if (qty > available) throw new HttpError(409, available > 0 ? `Only ${available} left of "${p.name}"` : `"${p.name}" is out of stock`)
       return {
-        productId: p.id, name: p.name, variantId: i.variantId || null, variantLabel: i.variantLabel ? String(i.variantLabel).slice(0, 200) : null,
-        selectedOptions: i.selectedOptions && typeof i.selectedOptions === 'object' && JSON.stringify(i.selectedOptions).length < 1000 ? i.selectedOptions : null, price, image: (i.image && p.images?.includes(i.image)) ? i.image : (p.images?.[0] || null), quantity: qty,
+         productId: p.id, name: p.name, variantId: i.variantId || null, variantLabel,
+        selectedOptions, price, image: (i.image && p.images?.includes(i.image)) ? i.image : (p.images?.[0] || null), quantity: qty,
         taxRate: p.taxRate || 0, taxType: p.taxType || 'inclusive', category: p.category,
       }
     })

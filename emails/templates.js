@@ -76,6 +76,7 @@ function statusColor(status) {
   };
   return map[status] || "#6b7280";
 }
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 function OrderItemsTable(items) {
   return `
@@ -92,7 +93,11 @@ function OrderItemsTable(items) {
           .map(
             (item) => `
           <tr>
-            <td style="${styles.td}">${item.name}</td>
+             <td style="${styles.td}">${esc(item.name)}${
+              item.variantLabel
+                ? `<br/><span style="font-size: 12px; color: #4f46e5;">${esc(item.variantLabel)}</span>`
+                : ""
+            }</td>
             <td style="${styles.td}; text-align: right; color: #6b7280;">${item.quantity}</td>
             <td style="${styles.td}; text-align: right; font-weight: 600;">
               ${formatPrice(item.price * item.quantity)}

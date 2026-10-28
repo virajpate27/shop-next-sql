@@ -447,6 +447,11 @@ export default function AdminOrdersPage() {
                       </div>
                       <div className="flex-1">
                         <p className="text-sm text-gray-900">{item.name}</p>
+                        {item.variantLabel && (
+                          <p className="text-xs font-medium text-indigo-600 mt-0.5">
+                            {item.variantLabel}
+                          </p>
+                        )}
                         <p className="text-xs text-gray-400">
                           Qty: {item.quantity}
                         </p>
