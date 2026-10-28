@@ -256,10 +256,10 @@ export default function CheckoutPage() {
         orderPlacedRef.current = true;
         clearCart(); // also clears coupon from store
 
-        Promise.allSettled([
-          triggerEmail("order_confirmed", user.email, { order: finalOrder, orderId }),
-          triggerEmail("admin_new_order", process.env.NEXT_PUBLIC_ADMIN_EMAIL, { order: finalOrder, orderId }),
-        ]);
+        // Promise.allSettled([
+        //   triggerEmail("order_confirmed", user.email, { order: finalOrder, orderId }),
+        //   triggerEmail("admin_new_order", process.env.NEXT_PUBLIC_ADMIN_EMAIL, { order: finalOrder, orderId }),
+        // ]);
 
         toast.success("Order placed successfully!");
         router.push(`/orders/${orderId}?success=true`);
