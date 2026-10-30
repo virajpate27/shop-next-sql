@@ -135,19 +135,20 @@ export default function CheckoutPage() {
   // ── Order ──────────────────────────────────────────────────────────────
   const [placingOrder, setPlacingOrder] = useState(false);
 
-    // Set the moment an order is saved. Stops the "empty cart → /cart" guard below from hijacking the redirect
+  // Set the moment an order is saved. Stops the "empty cart → /cart" guard below from hijacking the redirect
   // to the order page (clearCart() empties the cart a split second before we navigate).
- const orderPlacedRef = useRef(false);
-
+  const orderPlacedRef = useRef(false);
 
   // ── Guards ─────────────────────────────────────────────────────────────
-   
-   useEffect(() => {
+
+  useEffect(() => {
     if (!authLoading && !user) router.push("/login?redirect=/checkout");
   }, [user, authLoading, router]);
-  
+
   useEffect(() => {
-    if (!authLoading && items.length === 0 && !orderPlacedRef.current) router.push("/cart");
+    if (!authLoading && user && items.length === 0 && !orderPlacedRef.current) {
+      router.push("/cart");
+    }
   }, [items, authLoading, router]);
 
   // useEffect(() => {
@@ -257,13 +258,23 @@ export default function CheckoutPage() {
       if (paymentMethod === "cod") {
         const placed = await placeOrder(orderPayload); // stock + coupon are handled inside the server transaction
         const orderId = placed.orderId;
-        const finalOrder = { ...baseOrderData, total: placed.total, status: "confirmed" };
+        const finalOrder = {
+          ...baseOrderData,
+          total: placed.total,
+          status: "confirmed",
+        };
         orderPlacedRef.current = true;
         clearCart(); // also clears coupon from store
 
         Promise.allSettled([
-          triggerEmail("order_confirmed", user.email, { order: finalOrder, orderId }),
-          triggerEmail("admin_new_order", process.env.NEXT_PUBLIC_ADMIN_EMAIL, { order: finalOrder, orderId }),
+          triggerEmail("order_confirmed", user.email, {
+            order: finalOrder,
+            orderId,
+          }),
+          triggerEmail("admin_new_order", process.env.NEXT_PUBLIC_ADMIN_EMAIL, {
+            order: finalOrder,
+            orderId,
+          }),
         ]);
 
         toast.success("Order placed successfully!");
@@ -320,10 +331,20 @@ export default function CheckoutPage() {
         return;
       }
 
-      const finalOrder = { ...baseOrderData, total: payable, status: "confirmed" };
+      const finalOrder = {
+        ...baseOrderData,
+        total: payable,
+        status: "confirmed",
+      };
       Promise.allSettled([
-        triggerEmail("order_confirmed", user.email, { order: finalOrder, orderId }),
-        triggerEmail("admin_new_order", process.env.NEXT_PUBLIC_ADMIN_EMAIL, { order: finalOrder, orderId }),
+        triggerEmail("order_confirmed", user.email, {
+          order: finalOrder,
+          orderId,
+        }),
+        triggerEmail("admin_new_order", process.env.NEXT_PUBLIC_ADMIN_EMAIL, {
+          order: finalOrder,
+          orderId,
+        }),
       ]);
 
       orderPlacedRef.current = true;
@@ -332,7 +353,11 @@ export default function CheckoutPage() {
       router.push(`/orders/${orderId}?success=true`);
     } catch (err) {
       console.error("Order placement failed:", err);
-      toast.error(err?.message && err.message.length < 140 ? err.message : "Something went wrong. Please try again.");
+      toast.error(
+        err?.message && err.message.length < 140
+          ? err.message
+          : "Something went wrong. Please try again.",
+      );
     } finally {
       setPlacingOrder(false);
     }
