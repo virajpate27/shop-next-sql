@@ -137,17 +137,22 @@ export default function CheckoutPage() {
 
     // Set the moment an order is saved. Stops the "empty cart → /cart" guard below from hijacking the redirect
   // to the order page (clearCart() empties the cart a split second before we navigate).
-  const orderPlacedRef = useRef(false);
+ const orderPlacedRef = useRef(false);
 
 
   // ── Guards ─────────────────────────────────────────────────────────────
+   
    useEffect(() => {
+    if (!authLoading && !user) router.push("/login?redirect=/checkout");
+  }, [user, authLoading, router]);
+  
+  useEffect(() => {
     if (!authLoading && items.length === 0 && !orderPlacedRef.current) router.push("/cart");
   }, [items, authLoading, router]);
 
-  useEffect(() => {
-    if (!authLoading && items.length === 0) router.push("/cart");
-  }, [items, authLoading, router]);
+  // useEffect(() => {
+  //   if (!authLoading && items.length === 0) router.push("/cart");
+  // }, [items, authLoading, router]);
 
   // ── Load addresses ─────────────────────────────────────────────────────
   useEffect(() => {
