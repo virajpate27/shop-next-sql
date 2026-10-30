@@ -1,164 +1,199 @@
 // src/app/(shop)/profile/page.js
-'use client'
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { toast } from 'sonner'
+"use client";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
-  User, MapPin, Plus, Pencil, Trash2, X, Loader2, Phone,
-} from 'lucide-react'
-import { useAuth } from '@/context/AuthContext'
+  User,
+  MapPin,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  Loader2,
+  Phone,
+} from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import {
   getAddresses,
   addAddress,
   removeAddress,
   updateAddresses,
-} from '@/lib/api/addresses'
+} from "@/lib/api/addresses";
 
 const EMPTY_ADDRESS = {
-  label: 'Home',
-  fullName: '',
-  phone: '',
-  line1: '',
-  line2: '',
-  city: '',
-  state: '',
-  pincode: '',
+  label: "Home",
+  fullName: "",
+  phone: "",
+  line1: "",
+  line2: "",
+  city: "",
+  state: "",
+  pincode: "",
   isDefault: false,
-}
+};
 
 const INDIAN_STATES = [
-  'Andhra Pradesh', 'Bihar', 'Delhi', 'Goa', 'Gujarat', 'Karnataka', 'Kerala',
-  'Madhya Pradesh', 'Maharashtra', 'Punjab', 'Rajasthan', 'Tamil Nadu',
-  'Telangana', 'Uttar Pradesh', 'West Bengal',
-]
+  "Andhra Pradesh",
+  "Bihar",
+  "Delhi",
+  "Goa",
+  "Gujarat",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Punjab",
+  "Rajasthan",
+  "Tamil Nadu",
+  "Telangana",
+  "Uttar Pradesh",
+  "West Bengal",
+];
 
 export default function ProfilePage() {
-  const { user, profile, loading: authLoading, setProfile } = useAuth()
-  const router = useRouter()
+  const { user, profile, loading: authLoading, setProfile } = useAuth();
+  const router = useRouter();
 
-  const [name, setName] = useState('')
-  const [savingProfile, setSavingProfile] = useState(false)
+  const [name, setName] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
 
-  const [addresses, setAddresses] = useState([])
-  const [loadingAddresses, setLoadingAddresses] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [editingAddress, setEditingAddress] = useState(null)
-  const [form, setForm] = useState(EMPTY_ADDRESS)
-  const [saving, setSaving] = useState(false)
+  const [addresses, setAddresses] = useState([]);
+  const [loadingAddresses, setLoadingAddresses] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(null);
+  const [form, setForm] = useState(EMPTY_ADDRESS);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/login?redirect=/profile')
+      router.push("/login?redirect=/profile");
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (profile?.displayName) setName(profile.displayName)
-  }, [profile])
+    if (profile?.displayName) setName(profile.displayName);
+  }, [profile]);
 
   useEffect(() => {
     async function loadAddresses() {
-      if (!user) return
-      setLoadingAddresses(true)
+      if (!user) return;
+      setLoadingAddresses(true);
       try {
-        const result = await getAddresses(user.uid)
-        setAddresses(result)
+        const result = await getAddresses(user.uid);
+        setAddresses(result);
+      } catch (err) {
+        console.error("Failed to load addresses:", err);
+        toast.error("Couldn't load your addresses. Please refresh the page.");
       } finally {
-        setLoadingAddresses(false)
+        setLoadingAddresses(false);
       }
     }
-    loadAddresses()
-  }, [user])
+    loadAddresses();
+  }, [user]);
 
   async function handleSaveProfile(e) {
-    e.preventDefault()
-    if (!name.trim()) return toast.error('Name cannot be empty')
+    e.preventDefault();
+    if (!name.trim()) return toast.error("Name cannot be empty");
 
-    setSavingProfile(true)
+    setSavingProfile(true);
     try {
-      const res = await fetch('/api/auth/me', {
-        method: 'PATCH', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/auth/me", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ displayName: name.trim() }),
-      })
-      if (!res.ok) throw new Error('update failed')
-      setProfile((prev) => ({ ...prev, displayName: name.trim() }))
-      toast.success('Profile updated')
+      });
+      if (!res.ok) throw new Error("update failed");
+      setProfile((prev) => ({ ...prev, displayName: name.trim() }));
+      toast.success("Profile updated");
     } catch {
-      toast.error('Failed to update profile')
+      toast.error("Failed to update profile");
     } finally {
-      setSavingProfile(false)
+      setSavingProfile(false);
     }
   }
 
   function openAddAddress() {
-    setEditingAddress(null)
-    setForm(EMPTY_ADDRESS)
-    setShowModal(true)
+    setEditingAddress(null);
+    setForm(EMPTY_ADDRESS);
+    setShowModal(true);
   }
 
   function openEditAddress(address) {
-    setEditingAddress(address)
-    setForm(address)
-    setShowModal(true)
+    setEditingAddress(address);
+    setForm(address);
+    setShowModal(true);
   }
 
   function handleChange(e) {
-    const { name, value, type, checked } = e.target
-    setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
+    const { name, value, type, checked } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   }
 
   async function handleSaveAddress(e) {
-    e.preventDefault()
-    if (!form.fullName || !form.phone || !form.line1 || !form.city || !form.state || !form.pincode) {
-      return toast.error('Please fill all required fields')
+    e.preventDefault();
+    if (
+      !form.fullName ||
+      !form.phone ||
+      !form.line1 ||
+      !form.city ||
+      !form.state ||
+      !form.pincode
+    ) {
+      return toast.error("Please fill all required fields");
     }
     if (!/^\d{10}$/.test(form.phone)) {
-      return toast.error('Enter a valid 10-digit phone number')
+      return toast.error("Enter a valid 10-digit phone number");
     }
     if (!/^\d{6}$/.test(form.pincode)) {
-      return toast.error('Enter a valid 6-digit pincode')
+      return toast.error("Enter a valid 6-digit pincode");
     }
 
-    setSaving(true)
+    setSaving(true);
     try {
       if (editingAddress) {
         // Replace the edited address in-place
         const updated = addresses.map((a) =>
-          a.id === editingAddress.id ? { ...form, id: editingAddress.id } : a
-        )
-        await updateAddresses(user.uid, updated)
-        setAddresses(updated)
-        toast.success('Address updated')
+          a.id === editingAddress.id ? { ...form, id: editingAddress.id } : a,
+        );
+        await updateAddresses(user.uid, updated);
+        setAddresses(updated);
+        toast.success("Address updated");
       } else {
-        const newAddr = await addAddress(user.uid, form)
-        setAddresses((prev) => [...prev, newAddr])
-        toast.success('Address added')
+        const newAddr = await addAddress(user.uid, form);
+        setAddresses((prev) => [...prev, newAddr]);
+        toast.success("Address added");
       }
-      setShowModal(false)
+      setShowModal(false);
     } catch {
-      toast.error('Failed to save address')
+      toast.error("Failed to save address");
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
   async function handleDeleteAddress(address) {
-    if (!confirm('Delete this address?')) return
+    if (!confirm("Delete this address?")) return;
     try {
-      await removeAddress(user.uid, address)
-      setAddresses((prev) => prev.filter((a) => a.id !== address.id))
-      toast.success('Address removed')
+      await removeAddress(user.uid, address);
+      setAddresses((prev) => prev.filter((a) => a.id !== address.id));
+      toast.success("Address removed");
     } catch {
-      toast.error('Failed to remove address')
+      toast.error("Failed to remove address");
     }
   }
 
-  if (authLoading || !user) return null
+  if (authLoading || !user) return null;
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-8">Account settings</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-8">
+        Account settings
+      </h1>
 
       {/* Profile info */}
       <section className="bg-white border border-gray-100 rounded-2xl p-6 mb-6">
@@ -170,7 +205,9 @@ export default function ProfilePage() {
         <form onSubmit={handleSaveProfile} className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Full name</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Full name
+              </label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -178,7 +215,9 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Email
+              </label>
               <input
                 value={user.email}
                 disabled
@@ -246,9 +285,13 @@ export default function ProfilePage() {
                     </button>
                   </div>
                 </div>
-                <p className="text-sm font-medium text-gray-900">{addr.fullName}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {addr.fullName}
+                </p>
                 <p className="text-sm text-gray-500 leading-relaxed">
-                  {addr.line1}{addr.line2 ? `, ${addr.line2}` : ''}<br />
+                  {addr.line1}
+                  {addr.line2 ? `, ${addr.line2}` : ""}
+                  <br />
                   {addr.city}, {addr.state} — {addr.pincode}
                 </p>
                 <p className="text-sm text-gray-400 mt-1 flex items-center gap-1">
@@ -266,26 +309,31 @@ export default function ProfilePage() {
           <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h3 className="font-bold text-gray-900">
-                {editingAddress ? 'Edit address' : 'Add new address'}
+                {editingAddress ? "Edit address" : "Add new address"}
               </h3>
-              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded-xl">
+              <button
+                onClick={() => setShowModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-xl"
+              >
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
 
             <form onSubmit={handleSaveAddress} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Label</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Label
+                </label>
                 <div className="flex gap-2">
-                  {['Home', 'Work', 'Other'].map((l) => (
+                  {["Home", "Work", "Other"].map((l) => (
                     <button
                       key={l}
                       type="button"
                       onClick={() => setForm((p) => ({ ...p, label: l }))}
                       className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                         form.label === l
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-gray-100 text-gray-600'
+                          ? "bg-indigo-600 text-white"
+                          : "bg-gray-100 text-gray-600"
                       }`}
                     >
                       {l}
@@ -335,7 +383,9 @@ export default function ProfilePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Address line 2</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Address line 2
+                </label>
                 <input
                   name="line2"
                   value={form.line2}
@@ -369,7 +419,9 @@ export default function ProfilePage() {
                   >
                     <option value="">Select</option>
                     {INDIAN_STATES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -395,7 +447,9 @@ export default function ProfilePage() {
                   onChange={handleChange}
                   className="w-4 h-4 accent-indigo-600"
                 />
-                <span className="text-sm text-gray-700">Set as default address</span>
+                <span className="text-sm text-gray-700">
+                  Set as default address
+                </span>
               </label>
 
               <div className="flex gap-3 pt-2">
@@ -420,5 +474,5 @@ export default function ProfilePage() {
         </div>
       )}
     </div>
-  )
+  );
 }

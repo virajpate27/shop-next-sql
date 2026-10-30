@@ -22,9 +22,16 @@ export const POST = withAuth(async (req, _ctx, auth) => {
   const orderId = await tx(async (conn) => {
     const [[o]] = await conn.query('SELECT * FROM orders WHERE razorpay_order_id=? AND user_id=? FOR UPDATE', [rid, auth.uid])
     if (!o) throw new HttpError(404, 'Order not found for this payment')
-    if (o.status !== 'pending') return o.id // already confirmed — idempotent
+    
+     // A payment that arrives after the order was auto-expired/cancelled is still REAL money: confirm it (admin can refund from Razorpay if needed)
+    const lateButPaid = o.status === 'cancelled' && !o.razorpay_payment_id
+    if (o.status !== 'pending' && !lateButPaid) return o.id // already confirmed — idempotent
 
-    await addOrderEvent(conn, o.id, makeEvent('confirmed', 'Payment confirmed via Razorpay'), { status: 'confirmed', razorpay_payment_id: pid })
+    await addOrderEvent(conn, o.id,
+      makeEvent('confirmed', lateButPaid ? 'Payment confirmed via Razorpay (received after the order had been cancelled)' : 'Payment confirmed via Razorpay'),
+      { status: 'confirmed', razorpay_payment_id: pid })
+      
+      
     const items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items
     for (const l of items) await applyStockChange(conn, { productId: l.productId, variantId: l.variantId, qty: l.quantity, sale: true })
     if (o.coupon_id) await consumeCoupon(conn, o.coupon_id) // money is already captured: never fail the order over a coupon counter

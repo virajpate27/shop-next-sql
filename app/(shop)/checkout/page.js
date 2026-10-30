@@ -127,6 +127,8 @@ export default function CheckoutPage() {
   // ── Address ────────────────────────────────────────────────────────────
   const [addresses, setAddresses] = useState([]);
   const [loadingAddresses, setLoadingAddresses] = useState(true);
+  const [addressesError, setAddressesError] = useState(false);
+  const [addressReload, setAddressReload] = useState(0); // bump to retry loading
   const [selectedAddressId, setSelectedAddressId] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addressForm, setAddressForm] = useState(EMPTY_ADDRESS);
@@ -157,16 +159,29 @@ export default function CheckoutPage() {
 
   // ── Load addresses ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
+    let cancelled = false;
     setLoadingAddresses(true);
-    getAddresses(user.uid).then((result) => {
-      setAddresses(result);
-      const def = result.find((a) => a.isDefault) || result[0];
-      if (def) setSelectedAddressId(def.id);
-      if (result.length === 0) setShowAddForm(true);
-      setLoadingAddresses(false);
-    });
-  }, [user]);
+    setAddressesError(false);
+    getAddresses(user.uid)
+      .then((result) => {
+        if (cancelled) return;
+        setAddresses(result);
+        const def = result.find((a) => a.isDefault) || result[0];
+        if (def) setSelectedAddressId(def.id);
+        if (result.length === 0) setShowAddForm(true);
+      })
+      .catch((err) => {
+        console.error("Failed to load addresses:", err);
+        if (!cancelled) setAddressesError(true); // show "Try again" instead of a spinner that never ends
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAddresses(false); // ALWAYS reset, success or failure
+      });
+    return () => {
+      cancelled = true; // ignore a slow response from an older request
+    };
+  }, [user?.uid, addressReload]);
 
   function handleAddressFormChange(e) {
     const { name, value } = e.target;
@@ -425,6 +440,19 @@ export default function CheckoutPage() {
               {loadingAddresses ? (
                 <div className="flex justify-center py-10">
                   <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                </div>
+              ) : addressesError ? (
+                <div className="text-center py-8">
+                  <p className="text-sm text-red-600 mb-3">
+                    We couldn&apos;t load your saved addresses.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setAddressReload((n) => n + 1)}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
+                  >
+                    Try again
+                  </button>
                 </div>
               ) : (
                 <>

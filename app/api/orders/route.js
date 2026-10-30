@@ -4,7 +4,7 @@ import { withAuth, HttpError } from '@/lib/auth/guards'
 import { getProductsByIds, applyStockChange } from '@/lib/repo/products'
 import { findValidCoupon, consumeCoupon } from '@/lib/repo/coupons'
 import { getShippingConfigServer } from '@/lib/repo/shippingConfig'
-import { rowToOrder, event } from '@/lib/repo/orders'
+import { rowToOrder, event, findReusablePending } from '@/lib/repo/orders'
 import { calculateDiscount } from '@/lib/coupons'
 import { calculateShipping } from '@/lib/shipping'
 import { calculateCartTax, getTaxBreakdown } from '@/utils/tax'
@@ -73,6 +73,13 @@ export const POST = withAuth(async (req, _ctx, auth) => {
     // 3. Persist
     const isCod = paymentMethod === 'cod'
     const status = isCod ? 'confirmed' : 'pending'
+    
+     // Retry after cancelling the Razorpay popup → reuse the identical unpaid order instead of creating another
+    if (!isCod) {
+      const reuseId = await findReusablePending(conn, auth.uid, { lines, total, couponCode: coupon?.code || null, addressId: addressId || null })
+      if (reuseId) return { id: reuseId, total, status }
+    }
+
     const id = newId()
     await conn.query(
       `INSERT INTO orders (id,user_id,status,payment_method,subtotal,total_tax,shipping,cod_fee,discount,total,
