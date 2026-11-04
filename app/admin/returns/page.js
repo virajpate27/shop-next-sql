@@ -42,6 +42,7 @@ export default function AdminReturnsPage() {
   const [selected, setSelected] = useState(null);
   const [adminNote, setAdminNote] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [refundRef, setRefundRef] = useState(""); // UPI / bank reference for manual (COD) refunds
 
   const loadReturns = async () => {
     try {
@@ -75,6 +76,7 @@ export default function AdminReturnsPage() {
   function openDetail(ret) {
     setSelected(ret);
     setAdminNote(ret.adminNote || "");
+    setRefundRef("");
   }
 
   // Full updated handleAction:
@@ -89,7 +91,12 @@ export default function AdminReturnsPage() {
     try {
       // Server enforces the flow (pending → approved/rejected → refunded) and, on refund,
       // restocks inventory in the same database transaction — exactly once.
-      await updateReturnStatus(returnId, status, adminNote.trim());
+      const result = await updateReturnStatus(
+        returnId,
+        status,
+        adminNote.trim(),
+        status === "refunded" ? { reference: refundRef.trim() } : {},
+      );
       await loadReturns();
 
       // ── Notify customer ─────────────────────────────────────────────────
@@ -107,7 +114,9 @@ export default function AdminReturnsPage() {
         status === "approved"
           ? "Return approved — customer notified"
           : status === "refunded"
-            ? "Marked as refunded — stock restored"
+            ? result?.mode === "razorpay"
+              ? "Refund sent through Razorpay — stock restored"
+              : "Marked as refunded — stock restored"
             : "Return rejected — customer notified",
       );
 
@@ -115,7 +124,7 @@ export default function AdminReturnsPage() {
       setAdminNote("");
     } catch (err) {
       console.error(err);
-      toast.error("Failed to update return status");
+      toast.error(err?.message || "Failed to update return status");
     } finally {
       setProcessing(false);
     }
@@ -435,8 +444,44 @@ export default function AdminReturnsPage() {
                     />
                   </div>
 
+                  {selected.refundError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl p-3">
+                      Last refund attempt failed: {selected.refundError}
+                    </p>
+                  )}
+
+                  {selected.paymentMethod === "cod" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                        Refund reference
+                        <span className="text-gray-400 font-normal ml-1">
+                          (UPI / bank transaction ID, optional)
+                        </span>
+                      </label>
+                      <input
+                        value={refundRef}
+                        onChange={(e) => setRefundRef(e.target.value)}
+                        maxLength={100}
+                        placeholder="e.g. UPI ref 4231 8890 1234"
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">
+                        Cash on Delivery: send the money yourself first, then record it here.
+                      </p>
+                    </div>
+                  )}
+
                   <button
-                    onClick={() => handleAction(selected.id, "refunded")}
+                    onClick={() => {
+                      if (
+                        selected.paymentMethod === "cod" ||
+                        confirm(
+                          `Refund ${formatPrice(selected.refundAmount)} to the customer through Razorpay now?\n\nThis cannot be undone.`,
+                        )
+                      ) {
+                        handleAction(selected.id, "refunded");
+                      }
+                    }}
                     disabled={processing}
                     className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl font-medium transition-colors text-sm disabled:opacity-60"
                   >
@@ -445,12 +490,43 @@ export default function AdminReturnsPage() {
                     ) : (
                       <IndianRupee className="w-4 h-4" />
                     )}
-                    Mark as refunded
+                    {selected.paymentMethod === "cod"
+                      ? "Mark as refunded (paid manually)"
+                      : `Refund ${formatPrice(selected.refundAmount)} via Razorpay`}
                   </button>
                 </div>
               ) : (
                 /* Rejected or refunded — read only */
-                selected.adminNote && (
+                <>
+                  {selected.status === "refunded" && (
+                    <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm space-y-1">
+                      <p className="font-semibold text-gray-700">Refund</p>
+                      {selected.refundStatus === "manual" ? (
+                        <p className="text-gray-600">
+                          Paid manually
+                          {selected.refundReference ? ` · ref ${selected.refundReference}` : ""}
+                        </p>
+                      ) : selected.refundStatus === "processed" ? (
+                        <p className="text-green-700">
+                          Processed by Razorpay · {selected.razorpayRefundId}
+                        </p>
+                      ) : selected.refundStatus === "failed" ? (
+                        <p className="text-red-600 font-medium">
+                          Refund FAILED at Razorpay ({selected.razorpayRefundId || "no id"}). Refund it
+                          manually from the Razorpay dashboard.
+                        </p>
+                      ) : selected.refundStatus ? (
+                        <p className="text-amber-700">
+                          Sent to Razorpay · waiting for the bank · {selected.razorpayRefundId}
+                        </p>
+                      ) : (
+                        <p className="text-gray-500">
+                          Recorded before automatic refunds were enabled.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {selected.adminNote && (
                   <div
                     className={`rounded-xl p-4 border border-t border-gray-100 mt-4 ${
                       selected.status === "refunded"
@@ -477,7 +553,8 @@ export default function AdminReturnsPage() {
                       {selected.adminNote}
                     </p>
                   </div>
-                )
+                  )}
+                </>
               )}
             </div>
           </div>

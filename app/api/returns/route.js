@@ -46,5 +46,5 @@ export const GET = withAuth(async (req, _c, auth) => {
     rows = sp.get('userId') ? await query('SELECT * FROM returns WHERE user_id=? ORDER BY created_at DESC', [sp.get('userId')])
                             : await query('SELECT * FROM returns ORDER BY created_at DESC')
   } else rows = await query('SELECT * FROM returns WHERE user_id=? ORDER BY created_at DESC', [auth.uid])
-  return NextResponse.json({ returns: rows.map(rowToReturn) })
+  return NextResponse.json({ returns: rows.map((r) => rowToReturn(r, { admin })) })
 })

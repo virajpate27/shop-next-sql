@@ -87,13 +87,17 @@ export default function AdminOrdersPage() {
     });
   }, [orders, statusFilter, paymentFilter, search]);
 
-  async function handleStatusChange(orderId, newStatus) {
+  async function handleStatusChange(orderId, newStatus, refundConfirmed = false) {
     setUpdatingId(orderId);
     try {
-      // updateOrderStatus now saves a timeline event with timestamp
-      await updateOrderStatus(orderId, newStatus);
+      // The server records a timeline event; cancelling a PAID online order also refunds it via Razorpay and restocks
+      const result = await updateOrderStatus(orderId, newStatus, "", refundConfirmed ? { refund: true } : {});
       await loadOrders();
-      toast.success(`Order marked as ${newStatus}`);
+      toast.success(
+        result?.refunded
+          ? "Order cancelled — refund sent through Razorpay"
+          : `Order marked as ${newStatus}`,
+      );
 
       // Send status email to customer
       const notifyStatuses = [
@@ -112,8 +116,14 @@ export default function AdminOrdersPage() {
           });
         }
       }
-    } catch {
-      toast.error("Failed to update order status");
+    } catch (err) {
+      if (err?.data?.needsRefundConfirm) {
+        // paid online order: ask before refunding the customer
+        setUpdatingId(null);
+        if (confirm(err.message)) return handleStatusChange(orderId, newStatus, true);
+        return;
+      }
+      toast.error(err?.message || "Failed to update order status");
     } finally {
       setUpdatingId(null);
     }
