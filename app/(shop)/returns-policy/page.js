@@ -38,8 +38,8 @@ export default function ReturnsPolicyPage() {
           'For Cash on Delivery orders we will contact you on your registered email or phone to arrange the refund by bank transfer or UPI.',
         ]} />
       </Section>
-      <Section title="Cancelling an order">
-        <p>To cancel before your order ships, <Link href="/contact" className="text-indigo-600 underline">contact us</Link> with your order number as soon as possible. If you already paid online, the amount is refunded to your original payment method within {SITE.refundDays}. Once an order has shipped, you can refuse delivery or return it after delivery under this policy.</p>
+           <Section title="Cancelling an order">
+        <p>You can cancel an order yourself from <Link href="/orders" className="text-indigo-600 underline">My Orders</Link> until we start preparing it (while its status is &ldquo;Confirmed&rdquo;). If you already paid online, the full amount is refunded to your original payment method within {SITE.refundDays}. Once an order is being prepared or has shipped, it can no longer be cancelled online: <Link href="/contact" className="text-indigo-600 underline">contact us</Link> and we will help. After delivery, use the return process above.</p>
       </Section>
       <Section title="Need help?">
         <p>Email <a className="text-indigo-600 underline" href={`mailto:${SITE.email}`}>{SITE.email}</a>{SITE.phone ? ` or call ${SITE.phone}` : ''} ({SITE.hours}).</p>

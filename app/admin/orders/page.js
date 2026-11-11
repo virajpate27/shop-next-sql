@@ -15,10 +15,21 @@ import {
   Loader2,
   Tag,
   Trash2,
+  Truck,
+  FileText,
+  Printer,
+  Pencil,
 } from "lucide-react";
 import { formatPrice, formatDate } from "@/utils/formatters";
 import { getOptimizedUrl } from "@/lib/cloudinary";
-import { updateOrderStatus, deleteOrder, getAllOrders } from "@/lib/api/orders";
+import {
+  updateOrderStatus,
+  updateOrderTracking,
+  deleteOrder,
+  getAllOrders,
+} from "@/lib/api/orders";
+import { COURIERS } from "@/lib/tracking";
+import { canInvoice } from "@/lib/invoice";
 
 const STATUS_OPTIONS = [
   "pending",
@@ -38,6 +49,8 @@ const STATUS_STYLES = {
   cancelled: "bg-red-50 text-red-700",
 };
 
+const EMPTY_SHIP = { courier: "", number: "", url: "" };
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,15 +62,23 @@ export default function AdminOrdersPage() {
 
   const [deletingId, setDeletingId] = useState(null);
 
+  // "Shipping details" dialog: mode "ship" = marking as shipped, "edit" = correcting tracking afterwards
+  const [shipDialog, setShipDialog] = useState(null); // { order, mode }
+  const [shipForm, setShipForm] = useState(EMPTY_SHIP);
+  const [shipBusy, setShipBusy] = useState(false);
+
   // Poll every 15s (replaces Firestore onSnapshot). API returns newest first.
+  // Returns the fresh list so callers (e.g. the shipped email) can use up-to-date order data.
   const loadOrders = useCallback(async () => {
     try {
       const results = await getAllOrders();
       setOrders(results);
       // keep the open detail modal fresh
       setSelectedOrder((prev) => (prev ? results.find((o) => o.id === prev.id) || prev : prev));
+      return results;
     } catch (err) {
       console.error("Failed to load orders:", err);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -81,25 +102,31 @@ export default function AdminOrdersPage() {
           ?.toLowerCase()
           .includes(q);
         const matchesPhone = order.shippingAddress?.phone?.includes(q);
-        if (!matchesId && !matchesName && !matchesPhone) return false;
+        const matchesTracking = order.trackingNumber?.toLowerCase().includes(q);
+        if (!matchesId && !matchesName && !matchesPhone && !matchesTracking) return false;
       }
       return true;
     });
   }, [orders, statusFilter, paymentFilter, search]);
 
-  async function handleStatusChange(orderId, newStatus, refundConfirmed = false) {
+  // Returns true when the status change went through.
+  async function handleStatusChange(orderId, newStatus, refundConfirmed = false, tracking = null) {
     setUpdatingId(orderId);
     try {
-      // The server records a timeline event; cancelling a PAID online order also refunds it via Razorpay and restocks
-      const result = await updateOrderStatus(orderId, newStatus, "", refundConfirmed ? { refund: true } : {});
-      await loadOrders();
+      // The server records a timeline event; "shipped" can carry courier + tracking number in the same step;
+      // cancelling a PAID online order also refunds it via Razorpay and restocks.
+      const extra = {};
+      if (refundConfirmed) extra.refund = true;
+      if (tracking) extra.tracking = tracking;
+      const result = await updateOrderStatus(orderId, newStatus, "", extra);
+      const fresh = await loadOrders();
       toast.success(
         result?.refunded
           ? "Order cancelled — refund sent through Razorpay"
           : `Order marked as ${newStatus}`,
       );
 
-      // Send status email to customer
+      // Send status email to customer (uses the fresh order, so the shipped email includes the tracking details)
       const notifyStatuses = [
         "processing",
         "shipped",
@@ -107,7 +134,7 @@ export default function AdminOrdersPage() {
         "cancelled",
       ];
       if (notifyStatuses.includes(newStatus)) {
-        const order = orders.find((o) => o.id === orderId);
+        const order = (fresh || orders).find((o) => o.id === orderId);
         if (order?.customerEmail) {
           triggerEmail("order_status", order.customerEmail, {
             order,
@@ -116,16 +143,60 @@ export default function AdminOrdersPage() {
           });
         }
       }
+      return true;
     } catch (err) {
       if (err?.data?.needsRefundConfirm) {
         // paid online order: ask before refunding the customer
         setUpdatingId(null);
-        if (confirm(err.message)) return handleStatusChange(orderId, newStatus, true);
-        return;
+        if (confirm(err.message)) return handleStatusChange(orderId, newStatus, true, tracking);
+        return false;
       }
       toast.error(err?.message || "Failed to update order status");
+      return false;
     } finally {
       setUpdatingId(null);
+    }
+  }
+
+  // Dropdown handler: "shipped" first asks for courier / tracking, everything else changes straight away.
+  function requestStatusChange(order, value) {
+    if (value === order.status) return;
+    if (value === "shipped") {
+      setShipForm(EMPTY_SHIP);
+      setShipDialog({ order, mode: "ship" });
+      return;
+    }
+    handleStatusChange(order.id, value);
+  }
+
+  function openTrackingEditor(order) {
+    setShipForm({
+      courier: order.courierName || "",
+      number: order.trackingNumber || "",
+      url: order.trackingUrl || "",
+    });
+    setShipDialog({ order, mode: "edit" });
+  }
+
+  async function confirmShipDialog(skipTracking = false) {
+    if (!shipDialog) return;
+    const { order, mode } = shipDialog;
+    setShipBusy(true);
+    try {
+      if (mode === "ship") {
+        const tracking = skipTracking ? null : { courier: shipForm.courier, number: shipForm.number, url: shipForm.url };
+        const ok = await handleStatusChange(order.id, "shipped", false, tracking);
+        if (ok) setShipDialog(null); // on an error (e.g. invalid link) the dialog stays open so you can fix it
+      } else {
+        await updateOrderTracking(order.id, { courier: shipForm.courier, number: shipForm.number, url: shipForm.url });
+        await loadOrders();
+        toast.success("Tracking details saved");
+        setShipDialog(null);
+      }
+    } catch (err) {
+      toast.error(err?.message || "Could not save tracking details");
+    } finally {
+      setShipBusy(false);
     }
   }
 
@@ -205,7 +276,7 @@ export default function AdminOrdersPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by order ID, name, or phone..."
+            placeholder="Search by order ID, name, phone or tracking no...."
             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
@@ -298,15 +369,15 @@ export default function AdminOrdersPage() {
 
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      {/* Existing status dropdown */}
+                      {/* Status dropdown ("shipped" opens the shipping-details dialog) */}
                       <div className="relative inline-block">
                         <select
                           value={order.status}
                           onChange={(e) =>
-                            handleStatusChange(order.id, e.target.value)
+                            requestStatusChange(order, e.target.value)
                           }
-                          disabled={updatingId === order.id}
-                          className={`appearance-none text-xs font-medium pl-2.5 pr-7 py-1.5 rounded-full capitalize cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 ${STATUS_STYLES[order.status] || ""}`}
+                          disabled={updatingId === order.id || order.status === "cancelled"}
+                          className={`appearance-none text-xs font-medium pl-2.5 pr-7 py-1.5 rounded-full capitalize cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed ${STATUS_STYLES[order.status] || ""}`}
                         >
                           {STATUS_OPTIONS.map((s) => (
                             <option key={s} value={s}>
@@ -396,6 +467,28 @@ export default function AdminOrdersPage() {
             </div>
 
             <div className="p-6 space-y-5">
+              {/* Print documents */}
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={`/print/packing-slip/${selectedOrder.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Packing slip
+                </a>
+                {canInvoice(selectedOrder) && (
+                  <a
+                    href={`/print/invoice/${selectedOrder.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5" /> Invoice
+                  </a>
+                )}
+              </div>
+
               {/* Status selector */}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-500">Order status</span>
@@ -403,9 +496,10 @@ export default function AdminOrdersPage() {
                   <select
                     value={selectedOrder.status}
                     onChange={(e) =>
-                      handleStatusChange(selectedOrder.id, e.target.value)
+                      requestStatusChange(selectedOrder, e.target.value)
                     }
-                    className={`appearance-none text-sm font-medium pl-3 pr-8 py-1.5 rounded-full capitalize cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 ${STATUS_STYLES[selectedOrder.status] || ""}`}
+                    disabled={updatingId === selectedOrder.id || selectedOrder.status === "cancelled"}
+                    className={`appearance-none text-sm font-medium pl-3 pr-8 py-1.5 rounded-full capitalize cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed ${STATUS_STYLES[selectedOrder.status] || ""}`}
                   >
                     {STATUS_OPTIONS.map((s) => (
                       <option key={s} value={s}>
@@ -416,6 +510,68 @@ export default function AdminOrdersPage() {
                   <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" />
                 </div>
               </div>
+
+              {/* Shipment / tracking */}
+              {["shipped", "delivered"].includes(selectedOrder.status) && (
+                <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide flex items-center gap-1.5">
+                      <Truck className="w-3.5 h-3.5" /> Shipment
+                    </p>
+                    <button
+                      onClick={() => openTrackingEditor(selectedOrder)}
+                      className="flex items-center gap-1 text-xs font-medium text-purple-700 hover:underline"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      {selectedOrder.trackingNumber || selectedOrder.courierName ? "Edit" : "Add tracking"}
+                    </button>
+                  </div>
+                  {selectedOrder.trackingNumber || selectedOrder.courierName ? (
+                    <>
+                      <p className="text-sm text-gray-800">
+                        {selectedOrder.courierName || "Courier not set"}
+                        {selectedOrder.trackingNumber && (
+                          <> · <span className="font-mono font-semibold">{selectedOrder.trackingNumber}</span></>
+                        )}
+                      </p>
+                      {/^https?:\/\//i.test(selectedOrder.trackingUrl || "") && (
+                        <a
+                          href={selectedOrder.trackingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-purple-700 underline"
+                        >
+                          Open tracking link
+                        </a>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-purple-700/80">No tracking details yet. The customer sees them as soon as you add them.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Refund status (cancelled paid orders) */}
+              {selectedOrder.refundStatus && (
+                <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-sm">
+                  <p className="font-semibold text-gray-700 mb-0.5">Refund</p>
+                  {selectedOrder.refundStatus === "processed" ? (
+                    <p className="text-green-700">
+                      {formatPrice(selectedOrder.refundedAmount)} processed by Razorpay · {selectedOrder.razorpayRefundId}
+                    </p>
+                  ) : selectedOrder.refundStatus === "failed" ? (
+                    <p className="text-red-600 font-medium">
+                      Refund FAILED ({selectedOrder.razorpayRefundId || "no id"}). Refund it manually from the Razorpay dashboard.
+                    </p>
+                  ) : (
+                    <p className="text-amber-700">
+                      {formatPrice(selectedOrder.refundedAmount || selectedOrder.total)} sent to Razorpay · waiting for the bank
+                      {selectedOrder.razorpayRefundId ? ` · ${selectedOrder.razorpayRefundId}` : ""}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Address */}
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
@@ -567,6 +723,91 @@ export default function AdminOrdersPage() {
                   </>
                 )}
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shipping details dialog */}
+      {shipDialog && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-purple-600" />
+                  {shipDialog.mode === "ship" ? "Mark as shipped" : "Tracking details"}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Order #{shipDialog.order.id.slice(0, 8).toUpperCase()} · {shipDialog.order.shippingAddress?.fullName}
+                </p>
+              </div>
+              <button
+                onClick={() => setShipDialog(null)}
+                disabled={shipBusy}
+                className="p-2 hover:bg-gray-100 rounded-xl"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Courier</label>
+                <select
+                  value={COURIERS.includes(shipForm.courier) || !shipForm.courier ? shipForm.courier : "Other"}
+                  onChange={(e) => setShipForm((f) => ({ ...f, courier: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Select courier</option>
+                  {COURIERS.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Tracking / AWB number</label>
+                <input
+                  value={shipForm.number}
+                  onChange={(e) => setShipForm((f) => ({ ...f, number: e.target.value }))}
+                  maxLength={100}
+                  placeholder="e.g. 1234567890"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Tracking link <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  value={shipForm.url}
+                  onChange={(e) => setShipForm((f) => ({ ...f, url: e.target.value }))}
+                  maxLength={500}
+                  placeholder="https://courier.com/track/1234567890"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <p className="text-xs text-gray-400 mt-1">Customers get a “Track shipment” button when this is filled in.</p>
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                {shipDialog.mode === "ship" && (
+                  <button
+                    onClick={() => confirmShipDialog(true)}
+                    disabled={shipBusy}
+                    className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    Ship without tracking
+                  </button>
+                )}
+                <button
+                  onClick={() => confirmShipDialog(false)}
+                  disabled={shipBusy}
+                  className="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-60"
+                >
+                  {shipBusy && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {shipDialog.mode === "ship" ? "Mark as shipped" : "Save tracking"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

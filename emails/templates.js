@@ -76,7 +76,14 @@ function statusColor(status) {
   };
   return map[status] || "#6b7280";
 }
-const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const esc = (v) =>
+  String(v ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
 
 function OrderItemsTable(items) {
   return `
@@ -94,10 +101,10 @@ function OrderItemsTable(items) {
             (item) => `
           <tr>
              <td style="${styles.td}">${esc(item.name)}${
-              item.variantLabel
-                ? `<br/><span style="font-size: 12px; color: #4f46e5;">${esc(item.variantLabel)}</span>`
-                : ""
-            }</td>
+               item.variantLabel
+                 ? `<br/><span style="font-size: 12px; color: #4f46e5;">${esc(item.variantLabel)}</span>`
+                 : ""
+             }</td>
             <td style="${styles.td}; text-align: right; color: #6b7280;">${item.quantity}</td>
             <td style="${styles.td}; text-align: right; font-weight: 600;">
               ${formatPrice(item.price * item.quantity)}
@@ -287,6 +294,27 @@ export function orderStatusEmail({ order, orderId, newStatus }) {
 
   const color = statusColor(newStatus);
 
+  // Courier + tracking number (+ link) on the shipped email. The link is only used if it is a plain http(s) URL.
+  const trackingBlock =
+    newStatus === "shipped" && (order?.trackingNumber || order?.courierName)
+      ? `
+              <div style="background: #eef2ff; border-radius: 10px; padding: 14px 20px; margin-bottom: 24px;">
+                <p style="margin: 0; font-size: 12px; color: #6366f1;">Shipment</p>
+                <p style="margin: 4px 0 0; font-size: 14px; color: #374151;">
+                  ${esc(order.courierName || "Courier")}${
+                    order.trackingNumber
+                      ? ` · Tracking no. <b style="font-family: monospace;">${esc(order.trackingNumber)}</b>`
+                      : ""
+                  }
+                </p>
+                ${
+                  /^https?:\/\//i.test(order.trackingUrl || "")
+                    ? `<a href="${esc(order.trackingUrl)}" style="display: inline-block; margin-top: 8px; font-size: 13px; color: #4f46e5;">Track your parcel →</a>`
+                    : ""
+                }
+              </div>`
+      : "";
+
   return {
     subject: `${msg.emoji} Order #${orderId.slice(0, 8).toUpperCase()} — ${newStatus}`,
     html: `
@@ -313,6 +341,8 @@ export function orderStatusEmail({ order, orderId, newStatus }) {
                 </div>
                 <span style="${styles.badge(color)}">${newStatus}</span>
               </div>
+
+                ${trackingBlock}
 
               ${
                 newStatus === "delivered"

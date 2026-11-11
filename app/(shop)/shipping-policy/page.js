@@ -53,7 +53,7 @@ export default async function ShippingPolicyPage() {
         ]} />
       </Section>
       <Section title="Tracking your order">
-        <p>Sign in and open <Link href="/orders" className="text-indigo-600 underline">My Orders</Link> to see the live status of every order: confirmed, processing, shipped and delivered. We also email you at each step.</p>
+               <p>Sign in and open <Link href="/orders" className="text-indigo-600 underline">My Orders</Link> to see the live status of every order: confirmed, processing, shipped and delivered. When your parcel ships, the courier name and tracking number appear there and in our email, so you can follow it on the courier&apos;s website.</p>
       </Section>
       <Section title="Delivery attempts and addresses">
         <List items={[

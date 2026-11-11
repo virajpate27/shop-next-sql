@@ -8,9 +8,15 @@ import { Suspense } from 'react'
 import {
   CheckCircle2, Package, MapPin, CreditCard,
   Banknote, Loader2, ChevronLeft, Tag,RotateCcw,
+  Truck, Copy, FileText, XCircle,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { ReturnRequestModal } from '@/components/orders/ReturnRequestModal'
 import { ReturnStatusBadge } from '@/components/orders/ReturnStatusBadge'
+import { CancelOrderModal } from '@/components/orders/CancelOrderModal'
+import { canCustomerCancel } from '@/lib/orderCancel'
+import { canInvoice, gstMode } from '@/lib/invoice'
+import { SITE } from '@/lib/siteConfig'
 import { getReturnByOrderId, isReturnEligible, RETURN_STATUSES } from '@/lib/api/returns'
 
 import { getOrderById } from '@/lib/api/orders'
@@ -28,6 +34,7 @@ function OrderDetailContent() {
   const [loading, setLoading] = useState(true)
 
   const [showReturnModal, setShowReturnModal] = useState(false)
+  const [showCancel, setShowCancel] = useState(false)
 const [returnRequest,   setReturnRequest]   = useState(null)
 const [returnLoading,   setReturnLoading]   = useState(false)
 
@@ -85,6 +92,7 @@ const eligibility = order ? isReturnEligible(order) : { eligible: false }
 
   const statusCfg = getStatusConfig(order.status)
   const colors    = STATUS_COLORS[statusCfg.color]
+  const interState = gstMode(order.shippingAddress?.state, SITE.state).mode === 'inter' // same rule as the invoice
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
@@ -127,7 +135,115 @@ const eligibility = order ? isReturnEligible(order) : { eligible: false }
         <p className="text-xs text-gray-400 mt-1">
           Placed on {formatDate(order.createdAt)}
         </p>
+        {canInvoice(order) && (
+          <a
+            href={`/print/invoice/${order.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm text-indigo-600 font-medium mt-3 hover:underline"
+          >
+            <FileText className="w-4 h-4" /> View / download invoice
+          </a>
+        )}
       </div>
+
+      {/* Shipment / tracking */}
+      {(order.trackingNumber || order.courierName) && ['shipped', 'delivered'].includes(order.status) && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-4">
+          <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <Truck className="w-4 h-4 text-indigo-600" />
+            Shipment
+          </h2>
+          {order.courierName && (
+            <p className="text-sm text-gray-600">
+              Courier: <span className="font-medium text-gray-900">{order.courierName}</span>
+            </p>
+          )}
+          {order.trackingNumber && (
+            <p className="text-sm text-gray-600 mt-1 flex items-center gap-2 flex-wrap">
+              Tracking no.
+              <span className="font-mono font-semibold text-gray-900">{order.trackingNumber}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(order.trackingNumber)
+                  toast.success('Tracking number copied')
+                }}
+                className="p-1 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50"
+                title="Copy"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </p>
+          )}
+          {/^https?:\/\//i.test(order.trackingUrl || '') && (
+            <a
+              href={order.trackingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 mt-3 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-xl transition-colors"
+            >
+              <Truck className="w-4 h-4" /> Track shipment
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* Cancel (only before we start preparing the order) */}
+      {canCustomerCancel(order) ? (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-4 flex items-center justify-between flex-wrap gap-3">
+          <div className="max-w-md">
+            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+              <XCircle className="w-4 h-4 text-red-500" />
+              Need to cancel?
+            </h2>
+            <p className="text-xs text-gray-400 mt-1">
+              You can cancel until we start preparing your order.
+              {order.paymentMethod === 'razorpay' && order.razorpayPaymentId
+                ? ` Your payment will be refunded within ${SITE.refundDays}.`
+                : ''}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowCancel(true)}
+            className="text-sm text-red-600 font-medium border border-red-200 px-4 py-2 rounded-xl hover:bg-red-50 transition-colors"
+          >
+            Cancel order
+          </button>
+        </div>
+      ) : ['processing', 'shipped'].includes(order.status) ? (
+        <p className="text-xs text-gray-400 mb-4 px-1">
+          Your order is already {order.status === 'shipped' ? 'on its way' : 'being prepared'}, so it can no longer be cancelled
+          online.{' '}
+          <Link href="/contact" className="text-indigo-600 underline">Contact us</Link> if you need help.
+        </p>
+      ) : null}
+
+      {/* Refund status after a cancellation */}
+      {order.status === 'cancelled' && order.refundStatus && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 mb-4">
+          <h2 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-indigo-600" />
+            Refund
+          </h2>
+          {order.refundStatus === 'processed' ? (
+            <p className="text-sm text-green-700">
+              {formatPrice(order.refundedAmount || order.total)} has been refunded to your original payment method. It can take a few
+              days to appear in your statement.
+            </p>
+          ) : order.refundStatus === 'failed' ? (
+            <p className="text-sm text-amber-700">
+              We are sorting out your refund of {formatPrice(order.refundedAmount || order.total)}.{' '}
+              <Link href="/contact" className="underline">Contact us</Link> if you do not hear from us soon.
+            </p>
+          ) : (
+            <p className="text-sm text-gray-600">
+              Your refund of {formatPrice(order.refundedAmount || order.total)} has been started. It should reach your original payment
+              method within {SITE.refundDays}.
+            </p>
+          )}
+        </div>
+      )}
 
 
       {/* Return / refund section */}
@@ -214,6 +330,15 @@ const eligibility = order ? isReturnEligible(order) : { eligible: false }
       </div>
     )}
   </div>
+)}
+
+{/* Cancel modal */}
+{showCancel && order && (
+  <CancelOrderModal
+    order={order}
+    onClose={() => setShowCancel(false)}
+    onDone={() => getOrderById(order.id).then(setOrder).catch(() => {})}
+  />
 )}
 
 {/* Return modal */}
@@ -365,14 +490,23 @@ const eligibility = order ? isReturnEligible(order) : { eligible: false }
                   <span>Taxable value @ {tb.rate}%</span>
                   <span>{formatPrice(tb.baseAmount)}</span>
                 </div>
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>CGST @ {tb.rate / 2}%</span>
-                  <span>{formatPrice(tb.cgst)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>SGST @ {tb.rate / 2}%</span>
-                  <span>{formatPrice(tb.sgst)}</span>
-                </div>
+                {interState ? (
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>IGST @ {tb.rate}%</span>
+                    <span>{formatPrice(tb.taxAmount)}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>CGST @ {tb.rate / 2}%</span>
+                      <span>{formatPrice(tb.cgst)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>SGST @ {tb.rate / 2}%</span>
+                      <span>{formatPrice(tb.sgst)}</span>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
             <div className="flex justify-between text-xs font-semibold text-gray-700 pt-1 border-t border-gray-100">

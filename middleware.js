@@ -9,7 +9,7 @@ async function valid(token) {
 export async function middleware(req) {
   const authed = await valid(req.cookies.get('session')?.value)
   const { pathname } = req.nextUrl
-  const needsLogin = ['/checkout', '/orders', '/profile', '/wishlist', '/admin'].some((r) => pathname.startsWith(r))
+    const needsLogin = ['/checkout', '/orders', '/profile', '/wishlist', '/admin', '/print'].some((r) => pathname.startsWith(r))
   const isAuthPage = ['/login', '/register'].some((r) => pathname.startsWith(r))
 
   if (needsLogin && !authed) {                       // (was commented out before — re-enabled)
@@ -21,4 +21,4 @@ export async function middleware(req) {
   return NextResponse.next()
 }
 
-export const config = { matcher: ['/checkout/:path*', '/orders/:path*', '/profile/:path*', '/wishlist/:path*', '/admin/:path*', '/login', '/register'] }
+export const config = { matcher: ['/checkout/:path*', '/orders/:path*', '/profile/:path*', '/wishlist/:path*', '/admin/:path*', '/print/:path*', '/login', '/register'] }
