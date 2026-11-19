@@ -168,6 +168,8 @@ CREATE TABLE reviews (
   rating       TINYINT NOT NULL,
   comment      TEXT NULL,
   helpful      INT NOT NULL DEFAULT 0,
+    verified     TINYINT(1) NOT NULL DEFAULT 0,  -- 1 = reviewer has a delivered order containing this product
+  status       VARCHAR(12) NOT NULL DEFAULT 'published', -- published | hidden (moderation)
   created_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY uq_review_user_product (product_id, user_id),
   KEY ix_reviews_user (user_id)

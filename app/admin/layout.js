@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { LayoutDashboard, Package, ShoppingBag, Tag, Truck, Ticket, LogOut ,RotateCcw,Users,} from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingBag, Tag, Truck, Ticket, LogOut ,RotateCcw,Users, Star,} from 'lucide-react'
 
 import { logout } from '@/lib/auth/client';
 
@@ -15,7 +15,7 @@ const NAV = [
   { href: '/admin/customers',  icon: Users,           label: 'Customers'  },
   { href: '/admin/returns',    icon: RotateCcw,       label: 'Returns'    },
   { href: '/admin/categories', icon: Tag, label: 'Categories' }, 
-  
+    { href: '/admin/reviews',    icon: Star,            label: 'Reviews'    },
   { href: '/admin/shipping', icon: Truck,  label: 'Shipping'   },
   { href: '/admin/coupons',    icon: Ticket,          label: 'Coupons'    },
 ];

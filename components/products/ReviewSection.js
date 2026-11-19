@@ -1,10 +1,10 @@
 // src/components/products/ReviewSection.js
 'use client'
 import { useState, useEffect } from 'react'
-import { Star, ThumbsUp, Loader2, User } from 'lucide-react'
+import { Star, ThumbsUp, Loader2, User, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/context/AuthContext'
-import { getReviews, addReview, getUserReview, markHelpful } from '@/lib/api/reviews'
+import { getReviews, addReview, getReviewStatus, markHelpful } from '@/lib/api/reviews'
 import { formatDate } from '@/utils/formatters'
 
 function StarRating({ value, onChange, readonly = false, size = 'md' }) {
@@ -56,7 +56,9 @@ export function ReviewSection({ productId, productName }) {
   const { user, profile } = useAuth()
   const [reviews, setReviews] = useState([])
   const [loading, setLoading] = useState(true)
-  const [userReview, setUserReview] = useState(null)
+  // What this visitor may do: { review, canReview, reason } — reason: 'login' | 'not_purchased' | 'already_reviewed' | null
+  const [access, setAccess] = useState({ review: null, canReview: false, reason: 'login' })
+  const [voted, setVoted] = useState(() => new Set()) // reviews this visitor has already marked helpful (this session)
   const [showForm, setShowForm] = useState(false)
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
@@ -75,12 +77,12 @@ export function ReviewSection({ productId, productName }) {
     async function load() {
       setLoading(true)
       try {
-        const [allReviews, existing] = await Promise.all([
+        const [allReviews, status] = await Promise.all([
           getReviews(productId),
-          user ? getUserReview(productId, user.uid) : null,
+          user ? getReviewStatus(productId) : Promise.resolve({ review: null, canReview: false, reason: 'login' }),
         ])
         setReviews(allReviews)
-        setUserReview(existing)
+        setAccess(status)
       } finally {
         setLoading(false)
       }
@@ -97,14 +99,14 @@ export function ReviewSection({ productId, productName }) {
     try {
       await addReview(productId, user.uid, profile?.displayName || 'Anonymous', { rating, comment })
       toast.success('Review submitted!')
-      const updated = await getReviews(productId)
+      const [updated, status] = await Promise.all([getReviews(productId), getReviewStatus(productId)])
       setReviews(updated)
-      setUserReview({ rating, comment })
+      setAccess(status)
       setShowForm(false)
       setRating(0)
       setComment('')
-    } catch {
-      toast.error('Failed to submit review')
+    } catch (err) {
+      toast.error(err?.message || 'Failed to submit review') // e.g. "Only customers who have received this product can review it."
     } finally {
       setSubmitting(false)
     }
@@ -113,12 +115,12 @@ export function ReviewSection({ productId, productName }) {
   async function handleHelpful(reviewId) {
     if (!user) return toast.error('Sign in to mark reviews as helpful')
     try {
-      await markHelpful(reviewId)
-      setReviews((prev) =>
-        prev.map((r) => r.id === reviewId ? { ...r, helpful: (r.helpful || 0) + 1 } : r)
-      )
-    } catch {
-      toast.error('Something went wrong')
+      const res = await markHelpful(reviewId) // one vote per person, enforced by the server
+      setVoted((prev) => new Set(prev).add(reviewId))
+      setReviews((prev) => prev.map((r) => (r.id === reviewId ? { ...r, helpful: res.helpful } : r)))
+      if (!res.voted) toast.info('You already marked this review as helpful')
+    } catch (err) {
+      toast.error(err?.message || 'Something went wrong')
     }
   }
 
@@ -159,71 +161,79 @@ export function ReviewSection({ productId, productName }) {
         </div>
       )}
 
-      {/* Write review */}
-      {user ? (
-        userReview ? (
-          <div className="mb-8 p-4 bg-green-50 border border-green-100 rounded-xl">
-            <p className="text-sm text-green-700 font-medium">
-              You reviewed this product
-            </p>
-            <StarRating value={userReview.rating} readonly size="sm" />
-          </div>
-        ) : (
-          <div className="mb-8">
-            {!showForm ? (
-              <button
-                onClick={() => setShowForm(true)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-colors"
-              >
-                Write a review
-              </button>
-            ) : (
-              <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-2xl p-6">
-                <h3 className="font-semibold text-gray-900 mb-4">Your review for {productName}</h3>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
-                  <StarRating value={rating} onChange={setRating} size="lg" />
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Your review
-                  </label>
-                  <textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    rows={4}
-                    placeholder="Share your experience with this product..."
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">{comment.length}/500 characters</p>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowForm(false)}
-                    className="border border-gray-200 text-gray-700 text-sm px-5 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-colors disabled:opacity-60 flex items-center gap-2"
-                  >
-                    {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                    Submit review
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        )
-      ) : (
+      {/* Write review — only customers who received the product; everyone else sees why */}
+      {!user ? (
         <p className="mb-8 text-sm text-gray-500">
           <a href="/login" className="text-indigo-600 font-medium hover:underline">Sign in</a> to leave a review
+        </p>
+      ) : access.reason === 'already_reviewed' && access.review ? (
+        access.review.status === 'hidden' ? (
+          <div className="mb-8 p-4 bg-amber-50 border border-amber-100 rounded-xl">
+            <p className="text-sm text-amber-700 font-medium">Your review is being checked by our team and is not visible yet</p>
+          </div>
+        ) : (
+          <div className="mb-8 p-4 bg-green-50 border border-green-100 rounded-xl">
+            <p className="text-sm text-green-700 font-medium">You reviewed this product</p>
+            <StarRating value={access.review.rating} readonly size="sm" />
+          </div>
+        )
+      ) : access.canReview ? (
+        <div className="mb-8">
+          {!showForm ? (
+            <button
+              onClick={() => setShowForm(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-colors"
+            >
+              Write a review
+            </button>
+          ) : (
+            <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-2xl p-6">
+              <h3 className="font-semibold text-gray-900 mb-4">Your review for {productName}</h3>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
+                <StarRating value={rating} onChange={setRating} size="lg" />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Your review
+                </label>
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  rows={4}
+                  maxLength={500}
+                  placeholder="Share your experience with this product..."
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                />
+                <p className="text-xs text-gray-400 mt-1">{comment.length}/500 characters</p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="border border-gray-200 text-gray-700 text-sm px-5 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-colors disabled:opacity-60 flex items-center gap-2"
+                >
+                  {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Submit review
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      ) : (
+        <p className="mb-8 text-sm text-gray-500 bg-gray-50 rounded-xl px-4 py-3">
+          Reviews come from customers who have received this product. Once your order is delivered, you can share your
+          experience here.
         </p>
       )}
 
@@ -249,7 +259,14 @@ export function ReviewSection({ productId, productName }) {
                 <div className="flex-1">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">{review.displayName}</p>
+                      <p className="text-sm font-semibold text-gray-900 flex items-center gap-2 flex-wrap">
+                        {review.displayName}
+                        {review.verified && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                            <ShieldCheck className="w-3 h-3" /> Verified purchase
+                          </span>
+                        )}
+                      </p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <StarRating value={review.rating} readonly size="sm" />
                         <span className="text-xs text-gray-400">{formatDate(review.createdAt)}</span>
@@ -257,13 +274,20 @@ export function ReviewSection({ productId, productName }) {
                     </div>
                   </div>
                   <p className="text-sm text-gray-600 mt-2 leading-relaxed">{review.comment}</p>
-                  <button
-                    onClick={() => handleHelpful(review.id)}
-                    className="flex items-center gap-1.5 mt-3 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
-                  >
-                    <ThumbsUp className="w-3.5 h-3.5" />
-                    Helpful ({review.helpful || 0})
-                  </button>
+                  {review.userId === user?.uid ? (
+                    <p className="mt-3 text-xs text-gray-400">{review.helpful || 0} found this helpful</p>
+                  ) : (
+                    <button
+                      onClick={() => handleHelpful(review.id)}
+                      disabled={voted.has(review.id)}
+                      className={`flex items-center gap-1.5 mt-3 text-xs transition-colors ${
+                        voted.has(review.id) ? 'text-indigo-600' : 'text-gray-400 hover:text-indigo-600'
+                      }`}
+                    >
+                      <ThumbsUp className={`w-3.5 h-3.5 ${voted.has(review.id) ? 'fill-indigo-100' : ''}`} />
+                      Helpful ({review.helpful || 0})
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

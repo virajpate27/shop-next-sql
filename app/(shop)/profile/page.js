@@ -20,6 +20,7 @@ import {
   removeAddress,
   updateAddresses,
 } from "@/lib/api/addresses";
+import { ChangePasswordForm } from "@/components/profile/ChangePasswordForm";
 
 const EMPTY_ADDRESS = {
   label: "Home",
@@ -217,12 +218,16 @@ export default function ProfilePage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Email
+                {user.emailVerified === false ? (
+                  <span className="ml-2 text-xs font-medium text-amber-600">
+                    Not verified
+                  </span>
+                ) : (
+                  <span className="ml-2 text-xs font-medium text-green-600">
+                    ✓ Verified
+                  </span>
+                )}
               </label>
-              <input
-                value={user.email}
-                disabled
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 text-gray-400"
-              />
             </div>
           </div>
           <button
@@ -235,6 +240,9 @@ export default function ProfilePage() {
           </button>
         </form>
       </section>
+
+            {/* Security */}
+      <ChangePasswordForm />
 
       {/* Addresses */}
       <section className="bg-white border border-gray-100 rounded-2xl p-6">

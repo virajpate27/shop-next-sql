@@ -21,6 +21,7 @@ const FAQS = [
   { q: 'How do I use a coupon code?', a: 'Enter it in the coupon box on the cart or checkout page and click Apply. The discount appears in your order summary. Some coupons have a minimum order value or an expiry date.' },
   { q: 'I forgot my password.', a: <>Use <A href="/forgot-password">Forgot password</A> on the sign-in page and we will email you a reset link. It is valid for one hour. Check your spam folder if it does not arrive.</> },
   { q: 'My payment was deducted but the order is not confirmed.', a: <>Please <A href="/contact">contact us</A> with your order number or payment reference and we will sort it out quickly.</> },
+    { q: "Why can't I write a review?", a: 'Reviews can be written by customers whose order for that product has been delivered. This keeps reviews honest: every review shows a “Verified purchase” tag.' },
 ]
 
 export default function HelpPage() {

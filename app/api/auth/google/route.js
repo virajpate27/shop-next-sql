@@ -4,6 +4,7 @@ import { one, query, newId } from '@/lib/db'
 import { signSession, setSessionCookie } from '@/lib/auth/session'
 import { sendEmail } from '@/lib/sendEmail'
 import { getEmailTemplate } from '@/emails/templates'
+import { markEmailVerified } from '@/lib/repo/account'
 
 // Client obtains a Google OAuth access_token (popup) and posts it here.
 // We verify it was issued for OUR client id, then read the profile.
@@ -29,6 +30,7 @@ export async function POST(req) {
   } else if (!u.google_sub) {
     await query('UPDATE users SET google_sub=?, photo_url=COALESCE(photo_url,?) WHERE id=?', [prof.sub, prof.picture || null, u.id])
   }
+    await markEmailVerified(u.id) // Google only returns verified addresses (checked above)
   const res = NextResponse.json({ user: { uid: u.id, email: u.email, displayName: u.display_name, role: u.role } })
   return setSessionCookie(res, await signSession(u.id))
 }

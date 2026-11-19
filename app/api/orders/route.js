@@ -9,6 +9,7 @@ import { calculateDiscount } from '@/lib/coupons'
 import { calculateShipping } from '@/lib/shipping'
 import { calculateCartTax, getTaxBreakdown } from '@/utils/tax'
 import { getVariantLabel } from '@/utils/variations'
+import { SITE } from '@/lib/siteConfig'
 
 const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100
 
@@ -20,6 +21,11 @@ const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100
 export const POST = withAuth(async (req, _ctx, auth) => {
   const body = await req.json().catch(() => ({}))
   const { items, addressId, paymentMethod, couponCode } = body
+
+    if (SITE.requireVerifiedEmailToOrder && auth.emailVerified === false) {
+    throw new HttpError(403, 'Please verify your email before ordering. Use the banner at the top of the page to resend the link.')
+  }
+
   if (!Array.isArray(items) || !items.length) throw new HttpError(400, 'Cart is empty')
   if (!['cod', 'razorpay'].includes(paymentMethod)) throw new HttpError(400, 'Invalid payment method')
 

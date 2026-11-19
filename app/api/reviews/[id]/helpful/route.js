@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
-import { query } from '@/lib/db'
 import { withAuth } from '@/lib/auth/guards'
-export const POST = withAuth(async (_req, { params }) => {
-  await query('UPDATE reviews SET helpful = helpful + 1 WHERE id=?', [(await params).id]); return NextResponse.json({ ok: true })
+import { voteHelpful } from '@/lib/repo/reviews'
+
+// One vote per person per review (previously the counter could be pumped up by clicking repeatedly)
+export const POST = withAuth(async (_req, { params }, auth) => {
+  const r = await voteHelpful({ reviewId: (await params).id, userId: auth.uid })
+  return NextResponse.json(r)
 })
